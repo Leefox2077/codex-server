@@ -20,7 +20,7 @@ const PORT = process.env.PORT || 3001;
 
 // ─── Clé Google Books ─────────────────────────────────────────────────────────
 // Mets ta clé ici (même que dans App.jsx)
-const GOOGLE_BOOKS_API_KEY = "REMPLACE_PAR_TA_CLE";
+const GOOGLE_BOOKS_API_KEY = process.env.GOOGLE_BOOKS_API_KEY || "";
 
 // ─── Cache local des couvertures ──────────────────────────────────────────────
 const COVERS_DIR = path.join(__dirname, "covers");
