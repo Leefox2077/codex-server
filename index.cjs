@@ -19,8 +19,48 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // ─── Clé Google Books ─────────────────────────────────────────────────────────
-// Mets ta clé ici (même que dans App.jsx)
 const GOOGLE_BOOKS_API_KEY = process.env.GOOGLE_BOOKS_API_KEY || "";
+
+// ─── Supabase ─────────────────────────────────────────────────────────────────
+const SUPABASE_URL = process.env.SUPABASE_URL || "";
+const SUPABASE_KEY = process.env.SUPABASE_KEY || "";
+
+async function supabaseGet(isbn) {
+  if (!SUPABASE_URL || !SUPABASE_KEY) return null;
+  try {
+    const { body, status } = await fetchUrl(
+      `${SUPABASE_URL}/rest/v1/isbn_cache?isbn=eq.${isbn}&select=*&limit=1`,
+      { headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` } }
+    );
+    if (status !== 200) return null;
+    const rows = JSON.parse(body.toString("utf8"));
+    if (!rows.length) return null;
+    console.log(`[Supabase] Cache hit: ${isbn}`);
+    return rows[0];
+  } catch (err) {
+    console.error("[Supabase GET]", err.message);
+    return null;
+  }
+}
+
+async function supabaseSet(data) {
+  if (!SUPABASE_URL || !SUPABASE_KEY) return;
+  try {
+    await fetchUrl(`${SUPABASE_URL}/rest/v1/isbn_cache`, {
+      method: "POST",
+      headers: {
+        "apikey": SUPABASE_KEY,
+        "Authorization": `Bearer ${SUPABASE_KEY}`,
+        "Content-Type": "application/json",
+        "Prefer": "resolution=merge-duplicates",
+      },
+      body: JSON.stringify(data),
+    });
+    console.log(`[Supabase] Sauvegardé: ${data.isbn}`);
+  } catch (err) {
+    console.error("[Supabase SET]", err.message);
+  }
+}
 
 // ─── Cache local des couvertures ──────────────────────────────────────────────
 const COVERS_DIR = path.join(__dirname, "covers");
@@ -40,13 +80,18 @@ function extractYear(str) {
   return match ? match[0] : "";
 }
 
-function fetchUrl(url) {
+function fetchUrl(url, options = {}) {
   return new Promise((resolve, reject) => {
     const client = url.startsWith("https") ? https : http;
-    const req = client.get(url, { timeout: 15000 }, (res) => {
-      // Suit les redirections
+    const method = options.method || "GET";
+    const headers = options.headers || {};
+    const bodyData = options.body ? Buffer.from(options.body) : null;
+    if (bodyData) headers["Content-Length"] = bodyData.length;
+
+    const reqOptions = { method, headers, timeout: 15000 };
+    const req = client.request(url, reqOptions, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        return fetchUrl(res.headers.location).then(resolve).catch(reject);
+        return fetchUrl(res.headers.location, options).then(resolve).catch(reject);
       }
       const chunks = [];
       res.on("data", (chunk) => chunks.push(chunk));
@@ -54,6 +99,8 @@ function fetchUrl(url) {
     });
     req.on("error", reject);
     req.on("timeout", () => { req.destroy(); reject(new Error("Timeout")); });
+    if (bodyData) req.write(bodyData);
+    req.end();
   });
 }
 
@@ -390,6 +437,21 @@ app.get("/api/isbn/:isbn", async (req, res) => {
 
   console.log(`\n[ISBN] Recherche: ${isbn}`);
 
+  // ── Vérifier le cache Supabase d'abord ──
+  const cached = await supabaseGet(isbn);
+  if (cached) {
+    return res.json({
+      title: cached.title,
+      author: cached.author,
+      publisher: cached.publisher,
+      year: cached.year,
+      cover: cached.cover,
+      synopsis: cached.synopsis,
+      isbn: cached.isbn,
+      _sources: ["Cache"],
+    });
+  }
+
   // Cascade parallèle — Cultura en premier pour les données FR
   const [c, g, b, o] = await Promise.allSettled([
     fromCultura(isbn),
@@ -423,6 +485,19 @@ app.get("/api/isbn/:isbn", async (req, res) => {
     : result.coverUrl || "";
 
   delete result.coverUrl;
+
+  // ── Sauvegarder dans Supabase ──
+  await supabaseSet({
+    isbn: result.isbn,
+    title: result.title,
+    author: result.author,
+    publisher: result.publisher,
+    year: result.year,
+    cover: result.cover,
+    synopsis: result.synopsis,
+    sources: result._sources?.join(" + ") || "",
+  });
+
   res.json(result);
 });
 
