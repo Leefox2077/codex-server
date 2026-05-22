@@ -473,7 +473,8 @@ app.get("/api/isbn/:isbn", async (req, res) => {
 
   console.log(`[ISBN] Trouvé via: ${result._sources.join(" + ")}`);
 
-  // Télécharge et stocke la couverture
+  // Télécharge et stocke la couverture en local sur Railway
+  const sourceCoverUrl = result.coverUrl; // garde l'URL source avant de la modifier
   const localCover = await downloadCover(isbn, result.coverUrl);
 
   const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN
@@ -486,14 +487,14 @@ app.get("/api/isbn/:isbn", async (req, res) => {
 
   delete result.coverUrl;
 
-  // ── Sauvegarder dans Supabase ──
+  // ── Sauvegarder dans Supabase avec l'URL source (pas Railway) ──
   await supabaseSet({
     isbn: result.isbn,
     title: result.title,
     author: result.author,
     publisher: result.publisher,
     year: result.year,
-    cover: result.cover,
+    cover: sourceCoverUrl || result.cover, // URL source en priorité
     synopsis: result.synopsis,
     sources: result._sources?.join(" + ") || "",
   });
