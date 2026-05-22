@@ -46,7 +46,7 @@ async function supabaseGet(isbn) {
 async function supabaseSet(data) {
   if (!SUPABASE_URL || !SUPABASE_KEY) return;
   try {
-    await fetchUrl(`${SUPABASE_URL}/rest/v1/isbn_cache`, {
+    await fetchUrl(`${SUPABASE_URL}/rest/v1/isbn_cache?on_conflict=isbn`, {
       method: "POST",
       headers: {
         "apikey": SUPABASE_KEY,
@@ -56,7 +56,7 @@ async function supabaseSet(data) {
       },
       body: JSON.stringify(data),
     });
-    console.log(`[Supabase] Sauvegardé: ${data.isbn}`);
+    console.log(`[Supabase] Upsert: ${data.isbn}`);
   } catch (err) {
     console.error("[Supabase SET]", err.message);
   }
