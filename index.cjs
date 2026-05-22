@@ -518,6 +518,56 @@ app.post("/api/save", async (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── Route : sauvegarde bibliothèque complète ─────────────────────────────────
+app.post("/api/library/save", async (req, res) => {
+  const { userId, data } = req.body;
+  if (!userId || !data) return res.status(400).json({ error: "userId ou data manquant" });
+
+  try {
+    await fetchUrl(`${SUPABASE_URL}/rest/v1/libraries?on_conflict=user_id`, {
+      method: "POST",
+      headers: {
+        "apikey": SUPABASE_KEY,
+        "Authorization": `Bearer ${SUPABASE_KEY}`,
+        "Content-Type": "application/json",
+        "Prefer": "resolution=merge-duplicates",
+      },
+      body: JSON.stringify({
+        user_id: userId,
+        data: JSON.stringify(data),
+        updated_at: new Date().toISOString(),
+      }),
+    });
+    console.log(`[Library] Sauvegardé pour: ${userId}`);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[Library Save]", err.message);
+    res.status(500).json({ error: "Erreur sauvegarde" });
+  }
+});
+
+// ─── Route : chargement bibliothèque ─────────────────────────────────────────
+app.get("/api/library/:userId", async (req, res) => {
+  const { userId } = req.params;
+  if (!SUPABASE_URL || !SUPABASE_KEY) return res.status(503).json({ error: "Supabase non configuré" });
+
+  try {
+    const { body, status } = await fetchUrl(
+      `${SUPABASE_URL}/rest/v1/libraries?user_id=eq.${userId}&select=data,updated_at&limit=1`,
+      { headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` } }
+    );
+    if (status !== 200) return res.status(404).json({ error: "Introuvable" });
+    const rows = JSON.parse(body.toString("utf8"));
+    if (!rows.length) return res.status(404).json({ error: "Aucune bibliothèque trouvée" });
+    const parsed = JSON.parse(rows[0].data);
+    console.log(`[Library] Chargé pour: ${userId}`);
+    res.json({ ok: true, data: parsed, updatedAt: rows[0].updated_at });
+  } catch (err) {
+    console.error("[Library Load]", err.message);
+    res.status(500).json({ error: "Erreur chargement" });
+  }
+});
+
 // ─── Démarrage ────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`\n✅ Codex serveur démarré sur http://localhost:${PORT}`);
