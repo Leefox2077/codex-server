@@ -131,9 +131,11 @@ async function fromGoogleBooks(isbn) {
         null;
       if (coverUrl) coverUrl = coverUrl.replace(/^http:/, "https:").replace("&zoom=1", "");
     }
-    // Fallback : URL directe Google Books (fonctionne même sans imageLinks)
-    if (!coverUrl && volumeId) {
-      coverUrl = `https://books.google.com/books/content?id=${volumeId}&printsec=frontcover&img=1&zoom=5&source=gbs_api`;
+    // Fallback : URL directe Google Books — seulement si imageLinks existe
+    // (l'URL construite depuis l'ID est souvent un placeholder générique)
+    if (!coverUrl && volumeId && info.imageLinks) {
+      const candidate = `https://books.google.com/books/content?id=${volumeId}&printsec=frontcover&img=1&zoom=5&source=gbs_api`;
+      coverUrl = candidate;
     }
 
     return {
@@ -390,7 +392,10 @@ async function downloadCover(isbn, coverUrl) {
 
   // Liste des URLs à essayer dans l'ordre
   const candidates = [];
-  if (coverUrl) candidates.push(coverUrl);
+  // Exclure les URLs Google Books génériques (pas de vraie couverture)
+  if (coverUrl && !coverUrl.includes("books.google.com/books/content")) {
+    candidates.push(coverUrl);
+  }
 
   // Toujours essayer Amazon en complément
   const amazonUrl = await coverFromAmazon(isbn);
