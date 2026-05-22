@@ -387,7 +387,8 @@ async function downloadCover(isbn, coverUrl) {
     .find((f) => fs.existsSync(f));
   if (cached) {
     console.log(`[Cover] Cache hit: ${isbn}`);
-    return `/covers/${path.basename(cached)}`;
+    // Retourne le chemin local ET l'URL source originale
+    return { localPath: `/covers/${path.basename(cached)}`, sourceUrl: coverUrl };
   }
 
   // Liste des URLs à essayer dans l'ordre
@@ -408,7 +409,6 @@ async function downloadCover(isbn, coverUrl) {
     try {
       console.log(`[Cover] Essai: ${url}`);
       const { body, status, headers } = await fetchUrl(url);
-      // Rejette les placeholders (trop petits) et les URLs Open Library sans vraie image
       if (status !== 200 || body.length < 10000) {
         console.log(`[Cover] Rejeté (${body.length} bytes)`);
         continue;
@@ -418,14 +418,14 @@ async function downloadCover(isbn, coverUrl) {
       const filePath = path.join(COVERS_DIR, `${isbn}${ext}`);
       fs.writeFileSync(filePath, body);
       console.log(`[Cover] ✅ Sauvegardé depuis ${url}`);
-      return `/covers/${isbn}${ext}`;
+      return { localPath: `/covers/${isbn}${ext}`, sourceUrl: url };
     } catch (err) {
       console.error(`[Cover] Erreur sur ${url}:`, err.message);
     }
   }
 
   console.log(`[Cover] ❌ Aucune couverture trouvée pour ${isbn}`);
-  return null;
+  return { localPath: null, sourceUrl: null };
 }
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
@@ -479,19 +479,18 @@ app.get("/api/isbn/:isbn", async (req, res) => {
   console.log(`[ISBN] Trouvé via: ${result._sources.join(" + ")}`);
 
   // Télécharge et stocke la couverture en local sur Railway
-  const sourceCoverUrl = result.coverUrl; // garde l'URL source avant de la modifier
-  const localCover = await downloadCover(isbn, result.coverUrl);
+  const { localPath, sourceUrl } = await downloadCover(isbn, result.coverUrl);
 
   const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN
     ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
     : `http://localhost:${PORT}`;
 
-  result.cover = localCover
-    ? `${baseUrl}${localCover}`
-    : result.coverUrl || "";
+  result.cover = localPath
+    ? `${baseUrl}${localPath}`
+    : sourceUrl || result.coverUrl || "";
 
   // URL source pour sauvegarde locale dans l'app (résiste aux redéploiements)
-  result.coverSource = sourceCoverUrl || result.cover;
+  result.coverSource = sourceUrl || result.coverUrl || "";
 
   delete result.coverUrl;
 
@@ -502,7 +501,7 @@ app.get("/api/isbn/:isbn", async (req, res) => {
     author: result.author,
     publisher: result.publisher,
     year: result.year,
-    cover: sourceCoverUrl || result.cover, // URL source en priorité
+    cover: result.coverSource,
     synopsis: result.synopsis,
     sources: result._sources?.join(" + ") || "",
   });
