@@ -150,7 +150,11 @@ async function fromBnF(isbn) {
     }
     if (!year) year = extractYear(getDC("date"));
 
-    const synopsis = getDC("description");
+    let synopsis = getDC("description");
+    // Ignore les fausses descriptions BnF (codes EAN, métadonnées techniques)
+    if (synopsis && (synopsis.toLowerCase().includes("ean") || synopsis.toLowerCase().includes("code") || synopsis.length < 80)) {
+      synopsis = "";
+    }
 
     return {
       title,
