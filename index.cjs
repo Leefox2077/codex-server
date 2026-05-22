@@ -365,5 +365,3 @@ app.listen(PORT, () => {
   console.log(`   → Couvertures stockées dans : ${COVERS_DIR}`);
   console.log(`   → Test : http://localhost:${PORT}/api/health\n`);
 });
- 
- 
