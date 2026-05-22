@@ -43,7 +43,7 @@ function extractYear(str) {
 function fetchUrl(url) {
   return new Promise((resolve, reject) => {
     const client = url.startsWith("https") ? https : http;
-    const req = client.get(url, { timeout: 8000 }, (res) => {
+    const req = client.get(url, { timeout: 15000 }, (res) => {
       // Suit les redirections
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         return fetchUrl(res.headers.location).then(resolve).catch(reject);
