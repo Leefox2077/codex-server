@@ -314,7 +314,14 @@ async function downloadCover(isbn, coverUrl) {
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 // Sanity check
-app.get("/api/health", (_, res) => res.json({ ok: true, version: "1.0.0" }));
+app.get("/api/health", async (_, res) => {
+  try {
+    const data = await fetchJson("https://www.googleapis.com/books/v1/volumes?q=isbn:9782302072886");
+    res.json({ ok: true, version: "1.0.0", google_items: data?.totalItems || 0 });
+  } catch (err) {
+    res.json({ ok: false, version: "1.0.0", error: err.message });
+  }
+});
 
 // Infos complètes par ISBN (métadonnées + couverture téléchargée)
 app.get("/api/isbn/:isbn", async (req, res) => {
@@ -332,10 +339,6 @@ app.get("/api/isbn/:isbn", async (req, res) => {
     fromOpenLibrary(isbn),
   ]);
 
-  console.log("[G]", g.status, g.value ? `titre=${g.value.title}` : g.reason?.message || "null");
-  console.log("[B]", b.status, b.value ? `titre=${b.value.title}` : b.reason?.message || "null");
-  console.log("[O]", o.status, o.value ? `titre=${o.value.title}` : o.reason?.message || "null");
-
   const result = merge(
     g.status === "fulfilled" ? g.value : null,
     b.status === "fulfilled" ? b.value : null,
@@ -343,7 +346,6 @@ app.get("/api/isbn/:isbn", async (req, res) => {
   );
 
   if (!result.title) {
-    console.log("[ISBN] Aucun titre trouvé — retour 404");
     return res.status(404).json({ error: "Introuvable" });
   }
 
