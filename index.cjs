@@ -316,7 +316,7 @@ async function downloadCover(isbn, coverUrl) {
 // Sanity check
 app.get("/api/health", async (_, res) => {
   try {
-    const data = await fetchJson("https://www.googleapis.com/books/v1/volumes?q=isbn:9782302072886");
+    const data = await fetchJson(`https://www.googleapis.com/books/v1/volumes?q=isbn:9782302072886&key=${GOOGLE_BOOKS_API_KEY}`);
     res.json({ ok: true, version: "1.0.0", google_items: data?.totalItems || 0 });
   } catch (err) {
     res.json({ ok: false, version: "1.0.0", error: err.message });
