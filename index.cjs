@@ -251,6 +251,67 @@ async function coverFromAmazon(isbn) {
   }
 }
 
+// ─── Source 0 : Cultura (couverture + synopsis) ──────────────────────────────
+async function fromCultura(isbn) {
+  const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36";
+  try {
+    // Couverture : URL prévisible depuis l'ISBN
+    const coverUrl = `https://cdn.cultura.com/cdn-cgi/image/width=830/media/pim/TITELIVE/79_${isbn}_1_75.jpg`;
+    let validCover = null;
+    try {
+      const { status, body } = await fetchUrl(coverUrl, { headers: { "User-Agent": UA } });
+      if (status === 200 && body.length > 5000) {
+        validCover = coverUrl;
+        console.log(`[Cultura] Couverture trouvée (${body.length} bytes)`);
+      }
+    } catch (_) {}
+
+    // Synopsis + métadonnées : scrape la fiche produit
+    let synopsis = "", title = "", author = "";
+    try {
+      const searchUrl = `https://www.cultura.com/catalogsearch/result/?q=${isbn}`;
+      const { body: searchBody, status: searchStatus } = await fetchUrl(searchUrl, { headers: { "User-Agent": UA } });
+      if (searchStatus === 200) {
+        const searchHtml = searchBody.toString("utf8");
+        const linkMatch = searchHtml.match(/href="(https:\/\/www\.cultura\.com\/[^"]+\.html)"/);
+        if (linkMatch) {
+          const bookUrl = linkMatch[1];
+          console.log(`[Cultura] Fiche: ${bookUrl}`);
+          const { body: bookBody, status: bookStatus } = await fetchUrl(bookUrl, { headers: { "User-Agent": UA } });
+          if (bookStatus === 200) {
+            const html = bookBody.toString("utf8");
+            const titleMatch = html.match(/<h1[^>]*class="[^"]*stylePDP[^"]*"[^>]*>([^<]+)<\/h1>/i);
+            if (titleMatch) title = titleMatch[1].trim();
+            const authorMatch = html.match(/class="[^"]*one-pdp__author[^"]*"[^>]*>([^<]+)<\/[^>]+>/i);
+            if (authorMatch) author = authorMatch[1].trim();
+            const descMatch = html.match(/id="description"[\s\S]*?class="[^"]*one-collapse[^"]*one-wysiwyg[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
+            if (descMatch) {
+              synopsis = descMatch[1].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 2000);
+              console.log(`[Cultura] Synopsis trouvé (${synopsis.length} chars)`);
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
+    if (!validCover && !synopsis && !title) return null;
+
+    return {
+      title,
+      author,
+      publisher: "",
+      year: "",
+      coverUrl: validCover,
+      synopsis,
+      isbn,
+      _source: "Cultura",
+    };
+  } catch (err) {
+    console.error("[Cultura]", err.message);
+    return null;
+  }
+}
+
 // ─── Fusion des sources ───────────────────────────────────────────────────────
 function merge(...sources) {
   const result = { title: "", author: "", publisher: "", year: "", coverUrl: null, synopsis: "", isbn: "", _sources: [] };
