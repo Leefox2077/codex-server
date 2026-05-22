@@ -40,11 +40,10 @@ function extractYear(str) {
   return match ? match[0] : "";
 }
 
-function fetchUrl(url, options = {}) {
+function fetchUrl(url) {
   return new Promise((resolve, reject) => {
     const client = url.startsWith("https") ? https : http;
-    const reqOptions = { timeout: 15000, headers: options.headers || {} };
-    const req = client.get(url, reqOptions, (res) => {
+    const req = client.get(url, { timeout: 15000 }, (res) => {
       // Suit les redirections
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         return fetchUrl(res.headers.location).then(resolve).catch(reject);
@@ -252,49 +251,6 @@ async function coverFromAmazon(isbn) {
   }
 }
 
-
-// ─── Source 5 : Babelio (synopsis uniquement) ────────────────────────────────
-async function synopsisFromBabelio(isbn, title) {
-  try {
-    // Recherche par ISBN sur Babelio
-    const searchUrl = `https://www.babelio.com/recherche.php?Recherche=${isbn}&type=ISBN`;
-    const { body: searchBody, status: searchStatus } = await fetchUrl(searchUrl, {
-      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }
-    });
-    if (searchStatus !== 200) return "";
-
-    const searchHtml = searchBody.toString("utf8");
-
-    // Cherche le lien vers la fiche du livre
-    const linkMatch = searchHtml.match(/href="(\/livres\/[^"]+)"/);
-    if (!linkMatch) return "";
-
-    const bookUrl = `https://www.babelio.com${linkMatch[1]}`;
-    const { body: bookBody, status: bookStatus } = await fetchUrl(bookUrl, {
-      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }
-    });
-    if (bookStatus !== 200) return "";
-
-    const bookHtml = bookBody.toString("utf8");
-
-    // Extrait le synopsis — Babelio l'encadre dans un div avec id="d_bio"
-    const synopsisMatch = bookHtml.match(/<div[^>]*id="d_bio"[^>]*>([\s\S]*?)<\/div>/i);
-    if (!synopsisMatch) return "";
-
-    const synopsis = synopsisMatch[1]
-      .replace(/<[^>]+>/g, " ")   // supprime les balises HTML
-      .replace(/\s+/g, " ")       // normalise les espaces
-      .replace(/Lire la suite/gi, "")
-      .trim();
-
-    console.log(`[Babelio] Synopsis trouvé (${synopsis.length} chars)`);
-    return synopsis.slice(0, 2000); // limite à 2000 chars
-  } catch (err) {
-    console.error("[Babelio]", err.message);
-    return "";
-  }
-}
-
 // ─── Fusion des sources ───────────────────────────────────────────────────────
 function merge(...sources) {
   const result = { title: "", author: "", publisher: "", year: "", coverUrl: null, synopsis: "", isbn: "", _sources: [] };
@@ -369,14 +325,16 @@ app.get("/api/isbn/:isbn", async (req, res) => {
 
   console.log(`\n[ISBN] Recherche: ${isbn}`);
 
-  // Cascade parallèle
-  const [g, b, o] = await Promise.allSettled([
+  // Cascade parallèle — Cultura en premier pour les données FR
+  const [c, g, b, o] = await Promise.allSettled([
+    fromCultura(isbn),
     fromGoogleBooks(isbn),
     fromBnF(isbn),
     fromOpenLibrary(isbn),
   ]);
 
   const result = merge(
+    c.status === "fulfilled" ? c.value : null,
     g.status === "fulfilled" ? g.value : null,
     b.status === "fulfilled" ? b.value : null,
     o.status === "fulfilled" ? o.value : null,
@@ -387,12 +345,6 @@ app.get("/api/isbn/:isbn", async (req, res) => {
   }
 
   console.log(`[ISBN] Trouvé via: ${result._sources.join(" + ")}`);
-
-  // Si pas de synopsis, essaie Babelio
-  if (!result.synopsis && result.title) {
-    console.log("[ISBN] Pas de synopsis, tentative Babelio...");
-    result.synopsis = await synopsisFromBabelio(isbn, result.title);
-  }
 
   // Télécharge et stocke la couverture
   const localCover = await downloadCover(isbn, result.coverUrl);
