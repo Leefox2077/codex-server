@@ -494,19 +494,28 @@ app.get("/api/isbn/:isbn", async (req, res) => {
 
   delete result.coverUrl;
 
-  // ── Sauvegarder dans Supabase avec l'URL source (pas Railway) ──
+  // Pas de sauvegarde automatique — l'utilisateur valide d'abord dans l'app
+  res.json(result);
+});
+
+// ─── Route : sauvegarde manuelle dans Supabase (appelée au clic "Enregistrer") ──
+app.post("/api/save", async (req, res) => {
+  const { isbn, title, author, publisher, year, cover, synopsis } = req.body;
+  if (!isbn) return res.status(400).json({ error: "ISBN manquant" });
+
   await supabaseSet({
-    isbn: result.isbn,
-    title: result.title,
-    author: result.author,
-    publisher: result.publisher,
-    year: result.year,
-    cover: result.coverSource,
-    synopsis: result.synopsis,
-    sources: result._sources?.join(" + ") || "",
+    isbn,
+    title: title || "",
+    author: author || "",
+    publisher: publisher || "",
+    year: year || "",
+    cover: cover || "",
+    synopsis: synopsis || "",
+    sources: "user-validated",
   });
 
-  res.json(result);
+  console.log(`[Save] Fiche validée par l'utilisateur: ${isbn}`);
+  res.json({ ok: true });
 });
 
 // ─── Démarrage ────────────────────────────────────────────────────────────────
