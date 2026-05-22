@@ -332,6 +332,10 @@ app.get("/api/isbn/:isbn", async (req, res) => {
     fromOpenLibrary(isbn),
   ]);
 
+  console.log("[G]", g.status, g.value ? `titre=${g.value.title}` : g.reason?.message || "null");
+  console.log("[B]", b.status, b.value ? `titre=${b.value.title}` : b.reason?.message || "null");
+  console.log("[O]", o.status, o.value ? `titre=${o.value.title}` : o.reason?.message || "null");
+
   const result = merge(
     g.status === "fulfilled" ? g.value : null,
     b.status === "fulfilled" ? b.value : null,
@@ -339,6 +343,7 @@ app.get("/api/isbn/:isbn", async (req, res) => {
   );
 
   if (!result.title) {
+    console.log("[ISBN] Aucun titre trouvé — retour 404");
     return res.status(404).json({ error: "Introuvable" });
   }
 
