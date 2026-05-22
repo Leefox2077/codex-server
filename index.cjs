@@ -345,13 +345,15 @@ app.get("/api/isbn/:isbn", async (req, res) => {
   console.log(`[ISBN] Trouvé via: ${result._sources.join(" + ")}`);
 
   // Télécharge et stocke la couverture
-  const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN
-  ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
-  : `http://localhost:${PORT}`;
+  const localCover = await downloadCover(isbn, result.coverUrl);
 
-result.cover = localCover
-  ? `${baseUrl}${localCover}`
-  : result.coverUrl || "";
+  const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN
+    ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+    : `http://localhost:${PORT}`;
+
+  result.cover = localCover
+    ? `${baseUrl}${localCover}`
+    : result.coverUrl || "";
 
   delete result.coverUrl;
   res.json(result);
