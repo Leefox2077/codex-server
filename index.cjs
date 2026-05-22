@@ -485,6 +485,9 @@ app.get("/api/isbn/:isbn", async (req, res) => {
     ? `${baseUrl}${localCover}`
     : result.coverUrl || "";
 
+  // URL source pour sauvegarde locale dans l'app (résiste aux redéploiements)
+  result.coverSource = sourceCoverUrl || result.cover;
+
   delete result.coverUrl;
 
   // ── Sauvegarder dans Supabase avec l'URL source (pas Railway) ──
