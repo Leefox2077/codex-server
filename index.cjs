@@ -338,7 +338,7 @@ app.get("/api/isbn/:isbn", async (req, res) => {
     o.status === "fulfilled" ? o.value : null,
   );
 
-  if (!result.title && !result.author) {
+  if (!result.title) {
     return res.status(404).json({ error: "Introuvable" });
   }
 
