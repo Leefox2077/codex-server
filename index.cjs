@@ -292,7 +292,7 @@ async function coverFromAmazon(isbn) {
 
     const { body, status } = await fetchUrl(url);
     // Amazon renvoie une image 1x1 pixel (43 bytes) si pas de couverture
-    if (status !== 200 || body.length < 5000) {
+    if (status !== 200 || body.length < 10000) {
       console.log(`[Amazon] Pas de couverture (${body.length} bytes)`);
       return null;
     }
@@ -313,7 +313,7 @@ async function fromCultura(isbn) {
     let validCover = null;
     try {
       const { status, body } = await fetchUrl(coverUrl, { headers: { "User-Agent": UA } });
-      if (status === 200 && body.length > 5000) {
+      if (status === 200 && body.length > 10000) {
         validCover = coverUrl;
         console.log(`[Cultura] Couverture trouvée (${body.length} bytes)`);
       }
@@ -408,8 +408,8 @@ async function downloadCover(isbn, coverUrl) {
     try {
       console.log(`[Cover] Essai: ${url}`);
       const { body, status, headers } = await fetchUrl(url);
-      // Rejette les placeholders (trop petits)
-      if (status !== 200 || body.length < 5000) {
+      // Rejette les placeholders (trop petits) et les URLs Open Library sans vraie image
+      if (status !== 200 || body.length < 10000) {
         console.log(`[Cover] Rejeté (${body.length} bytes)`);
         continue;
       }
